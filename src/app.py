@@ -97,3 +97,32 @@ def create():
                 conn.close()
 
     return render_template('create.html')
+
+@app.route('/<int:id>/delete/', methods=('POST',))
+def delete(id):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Ejecutamos la eliminación basada en el ID
+        cur.execute('DELETE FROM books WHERE id = %s', (id,))
+        
+        # Verificamos si se eliminó algo (opcional pero recomendado)
+        if cur.rowcount == 0:
+            logging.warning(f"Se intentó eliminar el libro con ID {id} pero no existe.")
+        
+        conn.commit()
+        cur.close()
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logging.error(f"Error al eliminar el registro {id}: {e}")
+        return f"No se pudo eliminar el registro con ID {id}", 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+    return redirect(url_for('index'))
