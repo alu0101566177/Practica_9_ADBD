@@ -126,3 +126,45 @@ def delete(id):
             conn.close()
 
     return redirect(url_for('index'))
+
+@app.route('/<int:id>/edit/', methods=('GET', 'POST'))
+def edit(id):
+    # 1. Obtener el libro actual para pre-rellenar el formulario
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM books WHERE id = %s', (id,))
+    book = cur.fetchone()
+    
+    if book is None:
+        return "Libro no encontrado", 404
+
+    if request.method == 'POST':
+        # 2. Recoger datos del formulario
+        title = request.form.get('title', '').strip() or None
+        author = request.form.get('author', '').strip() or None
+        pages_num_raw = request.form.get('pages_num', '')
+        review = request.form.get('review', '').strip() or None
+
+        try:
+            pages_num = int(pages_num_raw) if pages_num_raw else None
+            
+            # 3. Ejecutar la actualización
+            cur.execute('''UPDATE books 
+                           SET title = %s, author = %s, pages_num = %s, review = %s
+                           WHERE id = %s''',
+                        (title, author, pages_num, review, id))
+            conn.commit()
+            return redirect(url_for('index'))
+            
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"Error actualizando libro {id}: {e}")
+            return "Error al actualizar los datos.", 500
+        finally:
+            cur.close()
+            conn.close()
+
+    # Si es GET, mostramos el formulario con los datos del libro
+    cur.close()
+    conn.close()
+    return render_template('edit.html', book=book)
