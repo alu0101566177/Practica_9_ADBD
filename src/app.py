@@ -50,19 +50,50 @@ def about():
 @app.route('/create/', methods=('GET', 'POST'))
 def create():
     if request.method == 'POST':
-        title = request.form['title']
-        author = request.form['author']
-        pages_num = int(request.form['pages_num'])
-        review = request.form['review']
+        # 1. Obtención de datos con limpieza básica
+        title = request.form.get('title', '').strip()
+        author = request.form.get('author', '').strip()
+        pages_num_raw = request.form.get('pages_num', '')
+        review = request.form.get('review', '').strip()
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute('INSERT INTO books (title, author, pages_num, review)'
-                    'VALUES (%s, %s, %s, %s)',
-                    (title, author, pages_num, review))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return redirect(url_for('index'))
+        # 2. Validación y manejo de NULOS
+        # Convertimos strings vacíos a None para que la DB los trate como NULL
+        title = title if title else None
+        author = author if author else None
+        review = review if review else None
+        
+        # Validación especial para el entero (evita error al convertir string vacío)
+        try:
+            pages_num = int(pages_num_raw) if pages_num_raw else None
+        except ValueError:
+            # Aquí podrías retornar un error al usuario indicando que el número no es válido
+            return "El número de páginas debe ser un valor numérico", 400
+
+        conn = None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # 3. Inserción segura
+            cur.execute('INSERT INTO books (title, author, pages_num, review)'
+                        'VALUES (%s, %s, %s, %s)',
+                        (title, author, pages_num, review))
+            
+            # 4. Confirmar los cambios
+            conn.commit()
+            cur.close()
+            return redirect(url_for('index'))
+
+        except Exception as e:
+            # 5. Deshacer cambios en caso de error (Rollback)
+            if conn:
+                conn.rollback()
+            logging.error(f"Error al insertar registro: {e}")
+            return "Ocurrió un error al guardar el libro.", 500
+
+        finally:
+            # 6. Cierre seguro de la conexión
+            if conn:
+                conn.close()
 
     return render_template('create.html')
